@@ -1,6 +1,6 @@
 {
   "name": "aris-kg",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "The Aris knowledge graph for coding agents: current CVEs, advisories, framework releases and reference code, as an MCP server, a dependency audit CLI and a GitHub Action.",
   "keywords": ["mcp", "model-context-protocol", "cve", "vulnerabilities", "dependency-audit", "security", "knowledge-graph", "claude", "cursor", "codex"],
   "homepage": "https://youraris.com",

@@ -112,6 +112,28 @@ function tomlPackages(text: string, ecosystem: Ecosystem): Dependency[] {
 }
 
 export const parsePoetryLock: Parser = (text) => tomlPackages(text, "pypi");
+// uv.lock lists the project itself as an editable or virtual package; skip it.
+export const parseUvLock: Parser = (text) =>
+  tomlPackages(
+    text
+      .split(/^(?=\[\[package\]\]\s*$)/m)
+      .filter((block) => !/^source\s*=\s*\{\s*(editable|virtual)\s*=/m.test(block))
+      .join(""),
+    "pypi",
+  );
+
+export const parsePipfileLock: Parser = (text) => {
+  const lock = JSON.parse(text) as Record<string, Record<string, { version?: string }> | undefined>;
+  const out: Dependency[] = [];
+  for (const section of ["default", "develop"]) {
+    for (const [name, info] of Object.entries(lock[section] ?? {})) {
+      const version = info?.version?.replace(/^===?/, "");
+      const found = version ? dep(name, version, "pypi") : null;
+      if (found) out.push(found);
+    }
+  }
+  return out;
+};
 export const parseCargoLock: Parser = (text) => tomlPackages(text, "crates");
 
 export const parseGoMod: Parser = (text) => {
@@ -137,15 +159,146 @@ export const parseGoMod: Parser = (text) => {
   return out;
 };
 
+export const parseGemfileLock: Parser = (text) => {
+  const out: Dependency[] = [];
+  let inGem = false;
+  for (const line of text.split("\n")) {
+    if (/^\S/.test(line)) inGem = line.trim() === "GEM";
+    if (!inGem) continue;
+    // "    rails (7.0.4)" or "    nokogiri (1.15.4-x86_64-linux)"; deeper lines are requirements.
+    const match = /^ {4}([^\s(]+) \(([^)\s]+)\)$/.exec(line);
+    if (match) {
+      const found = dep(match[1]!, match[2]!.split("-")[0]!, "rubygems");
+      if (found) out.push(found);
+    }
+  }
+  return out;
+};
+
+export const parseComposerLock: Parser = (text) => {
+  const lock = JSON.parse(text) as Record<string, { name?: string; version?: string }[] | undefined>;
+  const out: Dependency[] = [];
+  for (const pkg of [...(lock.packages ?? []), ...(lock["packages-dev"] ?? [])]) {
+    const found = pkg.name && pkg.version ? dep(pkg.name, pkg.version, "packagist") : null;
+    if (found) out.push(found);
+  }
+  return out;
+};
+
+export const parseNugetLock: Parser = (text) => {
+  const lock = JSON.parse(text) as {
+    dependencies?: Record<string, Record<string, { type?: string; resolved?: string }>>;
+  };
+  const out: Dependency[] = [];
+  for (const framework of Object.values(lock.dependencies ?? {})) {
+    for (const [name, info] of Object.entries(framework)) {
+      if (info.type === "Project" || !info.resolved) continue;
+      const found = dep(name, info.resolved, "nuget");
+      if (found) out.push(found);
+    }
+  }
+  return out;
+};
+
+export const parsePubspecLock: Parser = (text) => {
+  const out: Dependency[] = [];
+  let inPackages = false;
+  let name = "";
+  let source = "";
+  for (const line of text.split("\n")) {
+    if (/^\S/.test(line)) inPackages = line.startsWith("packages:");
+    if (!inPackages) continue;
+    const pkg = /^ {2}([^\s:]+):\s*$/.exec(line);
+    if (pkg) {
+      name = pkg[1]!;
+      source = "";
+      continue;
+    }
+    const src = /^ {4}source:\s*(\S+)/.exec(line);
+    if (src) source = src[1]!;
+    const version = /^ {4}version:\s*"?([^"\s]+)"?/.exec(line);
+    // SDK packages (flutter, flutter_test) aren't published on pub.dev.
+    if (version && name && source !== "sdk") {
+      const found = dep(name, version[1]!, "pub");
+      if (found) out.push(found);
+    }
+  }
+  return out;
+};
+
+export const parseMixLock: Parser = (text) => {
+  const out: Dependency[] = [];
+  for (const line of text.split("\n")) {
+    // "phoenix": {:hex, :phoenix, "1.7.10", "sha", [:mix], [...], "hexpm", "sha"},
+    const match = /^\s*"[^"]+":\s*\{:hex,\s*:"?([\w.-]+)"?,\s*"([^"]+)"/.exec(line);
+    if (match) {
+      const found = dep(match[1]!, match[2]!, "hex");
+      if (found) out.push(found);
+    }
+  }
+  return out;
+};
+
+/** github.com/owner/repo, the package name OSV uses for Swift. */
+function swiftName(location: string): string {
+  return location
+    .trim()
+    .replace(/^git@([^:]+):/, "$1/")
+    .replace(/^[a-z+]+:\/\//i, "")
+    .replace(/\.git$/, "")
+    .replace(/\/+$/, "");
+}
+
+export const parsePackageResolved: Parser = (text) => {
+  const lock = JSON.parse(text) as {
+    pins?: { location?: string; state?: { version?: string | null } }[];
+    object?: { pins?: { repositoryURL?: string; state?: { version?: string | null } }[] };
+  };
+  const pins = [
+    ...(lock.pins ?? []).map((p) => ({ url: p.location, version: p.state?.version })),
+    ...(lock.object?.pins ?? []).map((p) => ({ url: p.repositoryURL, version: p.state?.version })),
+  ];
+  const out: Dependency[] = [];
+  for (const pin of pins) {
+    const found = pin.url && pin.version ? dep(swiftName(pin.url), pin.version, "swift") : null;
+    if (found) out.push(found);
+  }
+  return out;
+};
+
+export const parseGradleLockfile: Parser = (text) => {
+  const out: Dependency[] = [];
+  for (const raw of text.split("\n")) {
+    // com.fasterxml.jackson.core:jackson-databind:2.13.0=compileClasspath,runtimeClasspath
+    const match = /^([^#\s:=]+):([^:=\s]+):([^:=\s]+)=/.exec(raw.trim());
+    if (match) {
+      const found = dep(`${match[1]}:${match[2]}`, match[3]!, "maven");
+      if (found) out.push(found);
+    }
+  }
+  return out;
+};
+
 const LOCKFILES: [string, Parser][] = [
   ["package-lock.json", parsePackageLock],
   ["pnpm-lock.yaml", parsePnpmLock],
   ["yarn.lock", parseYarnLock],
   ["poetry.lock", parsePoetryLock],
+  ["uv.lock", parseUvLock],
+  ["Pipfile.lock", parsePipfileLock],
   ["requirements.txt", parseRequirements],
   ["Cargo.lock", parseCargoLock],
   ["go.mod", parseGoMod],
+  ["gradle.lockfile", parseGradleLockfile],
+  ["Gemfile.lock", parseGemfileLock],
+  ["composer.lock", parseComposerLock],
+  ["packages.lock.json", parseNugetLock],
+  ["mix.lock", parseMixLock],
+  ["pubspec.lock", parsePubspecLock],
+  ["Package.resolved", parsePackageResolved],
 ];
+
+export const LOCKFILE_NAMES = LOCKFILES.map(([file]) => file);
 
 /** Lockfiles found in a directory, each with its unique pinned dependencies. */
 export function readLockfiles(directory: string): LockfileResult[] {

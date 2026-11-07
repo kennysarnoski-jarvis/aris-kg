@@ -6,7 +6,19 @@ const DEPENDENCY_BATCH = 500;
 const MAX_DESCRIPTION = 1500;
 
 export type SearchKind = "cve" | "knowledge" | "code";
-export const ECOSYSTEMS = ["npm", "pypi", "crates", "maven", "go"] as const;
+export const ECOSYSTEMS = [
+  "npm",
+  "pypi",
+  "crates",
+  "go",
+  "maven",
+  "rubygems",
+  "packagist",
+  "nuget",
+  "hex",
+  "pub",
+  "swift",
+] as const;
 export type Ecosystem = (typeof ECOSYSTEMS)[number];
 
 export interface Dependency {

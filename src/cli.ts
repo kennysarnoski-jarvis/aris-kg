@@ -1,7 +1,7 @@
 import { resolve } from "node:path";
 
 import { ArisClient, ArisError, type PackageReport, type SearchKind } from "./client.js";
-import { readLockfiles } from "./lockfiles.js";
+import { LOCKFILE_NAMES, readLockfiles } from "./lockfiles.js";
 import { VERSION } from "./version.js";
 
 const HELP = `aris-kg ${VERSION} — the Aris knowledge graph for your tools and agents
@@ -11,6 +11,8 @@ Usage:
   aris-kg audit [dir] [options]       Check the lockfiles in dir (default .) for known CVEs
       --fail-on <level>               critical | high | medium | low | none  (default: high)
       --json                          Print the full report as JSON
+                                      Reads npm, pnpm, yarn, Poetry, uv, Pipenv, pip, Cargo, Go,
+                                      Gradle, Bundler, Composer, NuGet, Mix, pub and SwiftPM lockfiles
   aris-kg search <cve|knowledge|code> <query…>
 
 Environment:
@@ -57,9 +59,7 @@ async function audit(args: string[]): Promise<number> {
 
   const lockfiles = readLockfiles(resolve(directory));
   if (lockfiles.length === 0) {
-    console.error(
-      `No lockfile found in ${resolve(directory)} (package-lock.json, pnpm-lock.yaml, yarn.lock, poetry.lock, requirements.txt, Cargo.lock, go.mod).`,
-    );
+    console.error(`No lockfile found in ${resolve(directory)}. aris-kg reads: ${LOCKFILE_NAMES.join(", ")}.`);
     return 2;
   }
   const dependencies = lockfiles.flatMap((lock) => lock.dependencies);

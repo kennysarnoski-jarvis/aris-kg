@@ -77,9 +77,27 @@ npx aris-kg audit --json > report.json
 npx aris-kg search cve CVE-2024-3094
 ```
 
-`audit` reads `package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`, `poetry.lock`, `requirements.txt`
-(pinned `==` lines), `Cargo.lock` and `go.mod`. It only checks exact versions, so use a lockfile
-rather than a manifest with ranges.
+`audit` reads these lockfiles. It only checks exact versions, so use a lockfile rather than a
+manifest with ranges.
+
+| Ecosystem | Lockfiles |
+| --- | --- |
+| npm | `package-lock.json`, `pnpm-lock.yaml`, `yarn.lock` |
+| Python | `poetry.lock`, `uv.lock`, `Pipfile.lock`, `requirements.txt` (pinned `==` lines) |
+| Rust | `Cargo.lock` |
+| Go | `go.mod` |
+| Java and Kotlin (Maven) | `gradle.lockfile` |
+| Ruby | `Gemfile.lock` |
+| PHP | `composer.lock` |
+| .NET | `packages.lock.json` |
+| Elixir | `mix.lock` |
+| Dart and Flutter | `pubspec.lock` |
+| Swift | `Package.resolved` |
+
+`aris_check_dependencies` and the API take any of these ecosystems: `npm`, `pypi`, `crates`, `go`,
+`maven`, `rubygems`, `packagist`, `nuget`, `hex`, `pub` and `swift`. The graph also covers OSV's
+Hackage, CRAN, ConanCenter, Linux kernel and GitHub Actions advisories, searchable with
+`aris_search_cve`.
 
 It exits with `1` when a vulnerability is at or above `--fail-on` (default `high`), or is exploited in
 the wild at any severity. `--fail-on none` never fails. Errors exit with `2`.

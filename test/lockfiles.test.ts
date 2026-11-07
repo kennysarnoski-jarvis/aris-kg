@@ -5,14 +5,26 @@ import { describe, expect, it } from "vitest";
 
 import {
   parseCargoLock,
+  parseComposerLock,
+  parseGemfileLock,
   parseGoMod,
+  parseGradleLockfile,
+  parseMixLock,
+  parseNugetLock,
   parsePackageLock,
+  parsePackageResolved,
+  parsePipfileLock,
   parsePnpmLock,
   parsePoetryLock,
+  parsePubspecLock,
   parseRequirements,
+  parseUvLock,
   parseYarnLock,
   readLockfiles,
 } from "../src/lockfiles.js";
+
+const short = (deps: { name: string; version: string; ecosystem?: string }[]) =>
+  deps.map((d) => `${d.ecosystem}:${d.name}@${d.version}`);
 
 describe("lockfile parsers", () => {
   it("reads package-lock v3 paths, including nested and scoped packages, and skips links", () => {
@@ -128,6 +140,139 @@ describe("lockfile parsers", () => {
       "github.com/gin-gonic/gin@v1.6.0",
       "golang.org/x/crypto@v0.0.0-20200220183623-bac4c82f6975",
       "github.com/pkg/errors@v0.9.1",
+    ]);
+  });
+
+  it("reads uv.lock and Pipfile.lock, skipping the project itself", () => {
+    const uv = [
+      "version = 1",
+      "[[package]]",
+      'name = "my-app"',
+      'version = "0.1.0"',
+      'source = { editable = "." }',
+      "",
+      "[[package]]",
+      'name = "jinja2"',
+      'version = "2.10"',
+      'source = { registry = "https://pypi.org/simple" }',
+    ].join("\n");
+    expect(short(parseUvLock(uv))).toEqual(["pypi:jinja2@2.10"]);
+    const pipfile = JSON.stringify({
+      _meta: {},
+      default: { requests: { version: "==2.19.0" }, local: { path: "." } },
+      develop: { pytest: { version: "==7.0.0" } },
+    });
+    expect(short(parsePipfileLock(pipfile))).toEqual(["pypi:requests@2.19.0", "pypi:pytest@7.0.0"]);
+  });
+
+  it("reads Gemfile.lock GEM specs, dropping platform suffixes and requirement lines", () => {
+    const text = [
+      "GIT",
+      "  remote: https://github.com/x/y.git",
+      "  specs:",
+      "    forked (1.0.0)",
+      "",
+      "GEM",
+      "  remote: https://rubygems.org/",
+      "  specs:",
+      "    actionpack (6.1.7.3)",
+      "      rack (~> 2.0, >= 2.0.9)",
+      "    nokogiri (1.15.4-x86_64-linux)",
+      "    rack (2.2.6)",
+      "",
+      "PLATFORMS",
+      "  x86_64-linux",
+    ].join("\n");
+    expect(short(parseGemfileLock(text))).toEqual([
+      "rubygems:actionpack@6.1.7.3",
+      "rubygems:nokogiri@1.15.4",
+      "rubygems:rack@2.2.6",
+    ]);
+  });
+
+  it("reads composer.lock packages and dev packages, skipping dev branches", () => {
+    const text = JSON.stringify({
+      packages: [
+        { name: "symfony/http-kernel", version: "v4.4.0" },
+        { name: "acme/fork", version: "dev-main" },
+      ],
+      "packages-dev": [{ name: "phpunit/phpunit", version: "9.5.0" }],
+    });
+    expect(short(parseComposerLock(text))).toEqual(["packagist:symfony/http-kernel@4.4.0", "packagist:phpunit/phpunit@9.5.0"]);
+  });
+
+  it("reads NuGet packages.lock.json across frameworks, skipping project references", () => {
+    const text = JSON.stringify({
+      version: 1,
+      dependencies: {
+        "net8.0": {
+          "Newtonsoft.Json": { type: "Direct", requested: "[12.0.1, )", resolved: "12.0.1" },
+          "My.Library": { type: "Project" },
+        },
+        "net6.0": { "System.Text.Json": { type: "Transitive", resolved: "6.0.0" } },
+      },
+    });
+    expect(short(parseNugetLock(text))).toEqual(["nuget:Newtonsoft.Json@12.0.1", "nuget:System.Text.Json@6.0.0"]);
+  });
+
+  it("reads pubspec.lock hosted packages and skips SDK packages", () => {
+    const text = [
+      "packages:",
+      "  http:",
+      '    dependency: "direct main"',
+      "    description:",
+      '      name: http',
+      '      url: "https://pub.dev"',
+      "    source: hosted",
+      '    version: "0.13.5"',
+      "  flutter:",
+      '    dependency: "direct main"',
+      "    description: flutter",
+      "    source: sdk",
+      '    version: "0.0.0"',
+      "sdks:",
+      '  dart: ">=3.0.0 <4.0.0"',
+    ].join("\n");
+    expect(short(parsePubspecLock(text))).toEqual(["pub:http@0.13.5"]);
+  });
+
+  it("reads mix.lock hex packages by their hex name", () => {
+    const text = [
+      "%{",
+      '  "phoenix": {:hex, :phoenix, "1.7.10", "abc", [:mix], [], "hexpm", "def"},',
+      '  "plug_crypto": {:hex, :plug_crypto, "1.2.3", "abc", [:mix], [], "hexpm", "def"},',
+      '  "dep_from_git": {:git, "https://github.com/x/y.git", "abc", []},',
+      "}",
+    ].join("\n");
+    expect(short(parseMixLock(text))).toEqual(["hex:phoenix@1.7.10", "hex:plug_crypto@1.2.3"]);
+  });
+
+  it("reads Package.resolved v1 and v2 pins as github.com/owner/repo", () => {
+    const v2 = JSON.stringify({
+      pins: [
+        { identity: "vapor", location: "https://github.com/vapor/vapor.git", state: { version: "4.50.0" } },
+        { identity: "branchy", location: "https://github.com/x/branchy", state: { branch: "main", version: null } },
+      ],
+      version: 2,
+    });
+    const v1 = JSON.stringify({
+      object: { pins: [{ package: "NIO", repositoryURL: "git@github.com:apple/swift-nio.git", state: { version: "2.40.0" } }] },
+      version: 1,
+    });
+    expect(short(parsePackageResolved(v2))).toEqual(["swift:github.com/vapor/vapor@4.50.0"]);
+    expect(short(parsePackageResolved(v1))).toEqual(["swift:github.com/apple/swift-nio@2.40.0"]);
+  });
+
+  it("reads gradle.lockfile coordinates as group:artifact", () => {
+    const text = [
+      "# This is a Gradle generated file for dependency locking.",
+      "com.fasterxml.jackson.core:jackson-databind:2.9.8=compileClasspath,runtimeClasspath",
+      "org.apache.logging.log4j:log4j-core:2.14.1=runtimeClasspath",
+      "empty=annotationProcessor",
+    ].join("\n");
+    expect(short(parseGradleLockfile(text))).toEqual([
+      "maven:com.fasterxml.jackson.core:jackson-databind@2.9.8",
+      "maven:org.apache.logging.log4j:log4j-core@2.14.1",
     ]);
   });
 
