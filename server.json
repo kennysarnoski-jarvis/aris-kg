@@ -1,0 +1,28 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.kennysarnoski-jarvis/aris-kg",
+  "description": "Current CVEs, advisories, framework releases and reference code from a 15M-concept graph.",
+  "repository": {
+    "url": "https://github.com/kennysarnoski-jarvis/aris-kg",
+    "source": "github"
+  },
+  "websiteUrl": "https://youraris.com",
+  "version": "0.1.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "aris-kg",
+      "version": "0.1.0",
+      "transport": { "type": "stdio" },
+      "packageArguments": [{ "type": "positional", "value": "mcp" }],
+      "environmentVariables": [
+        {
+          "name": "ARIS_API_KEY",
+          "description": "Your API key from youraris.com/account. Calls are billed to your Aris credits.",
+          "isRequired": true,
+          "isSecret": true
+        }
+      ]
+    }
+  ]
+}

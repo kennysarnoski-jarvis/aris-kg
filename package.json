@@ -1,0 +1,34 @@
+{
+  "name": "aris-kg",
+  "version": "0.1.0",
+  "description": "The Aris knowledge graph for coding agents: current CVEs, advisories, framework releases and reference code, as an MCP server, a dependency audit CLI and a GitHub Action.",
+  "keywords": ["mcp", "model-context-protocol", "cve", "vulnerabilities", "dependency-audit", "security", "knowledge-graph", "claude", "cursor", "codex"],
+  "homepage": "https://youraris.com",
+  "repository": { "type": "git", "url": "git+https://github.com/kennysarnoski-jarvis/aris-kg.git" },
+  "bugs": { "url": "https://github.com/kennysarnoski-jarvis/aris-kg/issues" },
+  "license": "MIT",
+  "mcpName": "io.github.kennysarnoski-jarvis/aris-kg",
+  "type": "module",
+  "bin": { "aris-kg": "dist/bin.js" },
+  "exports": {
+    ".": { "types": "./dist/client.d.ts", "default": "./dist/client.js" },
+    "./lockfiles": { "types": "./dist/lockfiles.d.ts", "default": "./dist/lockfiles.js" }
+  },
+  "files": ["dist", "README.md", "LICENSE"],
+  "engines": { "node": ">=18.18" },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && chmod +x dist/bin.js",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "prepublishOnly": "npm run typecheck && npm test && npm run build"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.0"
+  }
+}

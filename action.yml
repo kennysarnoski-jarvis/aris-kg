@@ -1,0 +1,32 @@
+name: Aris dependency audit
+description: Check the lockfiles in a repository against the Aris knowledge graph's CVEs and advisories.
+author: Aris
+branding:
+  icon: shield
+  color: green
+inputs:
+  api-key:
+    description: Your Aris API key (store it as a secret). Each package checked costs 1 cent.
+    required: true
+  path:
+    description: Folder with the lockfiles.
+    default: "."
+  fail-on:
+    description: Lowest severity that fails the job (critical, high, medium, low or none). Exploited-in-the-wild vulnerabilities fail at any level but none.
+    default: high
+  version:
+    description: aris-kg version to run.
+    default: "0"
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 22
+    - shell: bash
+      env:
+        ARIS_API_KEY: ${{ inputs.api-key }}
+        AUDIT_PATH: ${{ inputs.path }}
+        FAIL_ON: ${{ inputs.fail-on }}
+        ARIS_KG_VERSION: ${{ inputs.version }}
+      run: npx --yes "aris-kg@${ARIS_KG_VERSION}" audit "$AUDIT_PATH" --fail-on "$FAIL_ON"
